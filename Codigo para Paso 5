@@ -1,0 +1,36 @@
+import serial
+import csv
+arduino_port = 'COM9'  # Cambiar al puerto correcto
+#arduino_port_2 = 'COM9'
+baud_rate = 57600
+#baud_rate_motor = 9600
+try:
+    ser = serial.Serial(arduino_port, baud_rate)
+    #motor = serial.Serial(arduino_port_2, baud_rate_motor)
+    print("Conexión establecida con éxito.")
+    ser.flushInput()
+
+    # Abre un archivo para escritura
+    #Cabmiar nombre parecido al sistema estrcutural a evaluar
+    file_name = "PM7.csv" #carpeta donde se guardaran los datos
+    file = open(file_name, "w")
+
+    # Espera a que Arduino inicie
+    while True:
+        try:
+            # Lee los datos del monitor serial
+            if ser.in_waiting > 0:
+                line = ser.readline().decode('utf-8').rstrip()
+                print(line)  # Muestra los datos en la consola
+                file.write(line + "\n")  # Escribe los datos en el archivo
+                file.flush()  # Forzar escritura en el archivo
+        except KeyboardInterrupt:
+            print("Programa detenido.")
+            break
+
+    # Cierra el archivo y la conexión serial
+    file.close()
+    ser.close()
+
+except serial.SerialException as e:
+    print(f"No se pudo establecer la conexión: {e}")
