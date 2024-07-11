@@ -1,0 +1,253 @@
+import pandas as pd
+import numpy as np
+import scipy.integrate
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt, welch
+import math
+
+# Leer los datos del archivo CSV
+df = pd.read_csv("data_log.csv")  # Ajusta esta ruta a la ubicación correcta de tu archivo
+
+# Asumimos que la primera columna es la que contiene los datos de aceleración
+df_x = df.iloc[:, 0]
+ug = df_x.dropna()
+ug_values = ug.values
+
+# Definir el intervalo de tiempo
+dt = 0.01
+n = len(ug_values)
+t = np.arange(0, dt * n, dt)
+
+# Función para aplicar un filtro pasaaltos de Butterworth
+def butter_highpass(cutoff, fs, order=5):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+def highpass_filter(data, cutoff, fs, order=5):
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
+
+# Eliminar la media de la señal de aceleración
+ug_mean = np.mean(ug_values)
+ug_values -= ug_mean
+
+# Aplicar un filtro pasaaltos de Butterworth para eliminar el drift
+cutoff_frequency = 2.5  # Frecuencia de corte para el filtro pasaaltos (en Hz)
+fs = 1 / dt  # Frecuencia de muestreo
+ug_filtered1 = highpass_filter(ug_values, cutoff_frequency, fs)
+
+# Graficar aceleración
+plt.figure(figsize=(10, 6))
+plt.plot(t, ug_filtered1, color='blue', linewidth=0.5, alpha=1)
+plt.title('Aceleración de la Tierra vs. Tiempo')
+plt.xlabel('Tiempo [s]')
+plt.ylabel('Aceleración [m/s²]')
+plt.grid(alpha=0.25)
+plt.tight_layout()
+plt.show()
+
+#######################################################################################################################
+#                                                   #ACELEROMETRO#                                                    #
+#######################################################################################################################
+# Asumimos que la primera columna es la que contiene los datos de aceleración
+df_x = df.iloc[:, 3]
+ug = df_x.dropna()
+ug_values = ug.values
+
+# Definir el intervalo de tiempo
+dt = 0.01
+n = len(ug_values)
+t = np.arange(0, dt * n, dt)
+
+# Función para aplicar un filtro pasaaltos de Butterworth
+def butter_highpass(cutoff, fs, order=5):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+def highpass_filter(data, cutoff, fs, order=5):
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
+
+# Eliminar la media de la señal de aceleración
+ug_mean = np.mean(ug_values)
+ug_values -= ug_mean
+
+# Ajustar frecuencia de corte
+cutoff_frequency = 3.5  # Frecuencia de corte para el filtro pasaaltos (en Hz)
+fs = 1 / dt  # Frecuencia de muestreo
+ug_filtered = highpass_filter(ug_values, cutoff_frequency, fs)
+
+# Integración para obtener la velocidad
+velocity = scipy.integrate.cumtrapz(ug_filtered, t, initial=0)
+
+# Otra aplicación de filtro para eliminar el drift en la velocidad
+velocity_filtered = highpass_filter(velocity, cutoff_frequency, fs)
+
+# Integración para obtener el desplazamiento
+displacement = scipy.integrate.cumtrapz(velocity_filtered, t, initial=0)
+
+# Calcular la densidad espectral de potencia (PSD)
+frequencies, psd = welch(ug_filtered, fs=1/dt, nperseg=1024)
+
+# Identificar la frecuencia dominante (frecuencia del pico más alto)
+dominant_frequency = frequencies[np.argmax(psd)]
+
+# Calcular el período natural correspondiente a la frecuencia dominante
+natural_period = 1 / dominant_frequency
+
+print("Frecuencia dominante:", dominant_frequency, "Hz")
+print("Período natural:", natural_period, "s")
+
+#######################################################################################################################
+#                                                   #BETA NEWMARK                                                     #
+#######################################################################################################################
+# Asumimos que la primera columna es la que contiene los datos de aceleración
+df_x = df.iloc[:, 3]
+ug = df_x.dropna()
+ug_values = ug.values
+
+# Definir el intervalo de tiempo
+dt = 0.01
+n = len(ug_values)
+t = np.arange(0, dt * n, dt)
+
+# Función para aplicar un filtro pasaaltos de Butterworth
+def butter_highpass(cutoff, fs, order=5):
+    nyquist = 0.5 * fs
+    normal_cutoff = cutoff / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+def highpass_filter(data, cutoff, fs, order=5):
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
+
+# Eliminar la media de la señal de aceleración
+ug_mean = np.mean(ug_values)
+ug_values -= ug_mean
+
+# Aplicar un filtro pasaaltos de Butterworth para eliminar el drift
+cutoff_frequency = 3.5  # Frecuencia de corte para el filtro pasaaltos (en Hz)
+fs = 1 / dt  # Frecuencia de muestreo
+ug_filtered2 = highpass_filter(ug_values, cutoff_frequency, fs)
+
+# Proceso de Newmark-Beta
+pi = math.pi
+u0=0 # desplazameinto inicial
+up0=0 # velocidad inicial
+
+Tn=natural_period # perido del pendulo #casas menores a 5 pisos #t=n/10
+
+ζ=0.5
+Δt=0.01
+γ=1/2 # parametro de precision, generalmente 1/2
+β=1/4 # razon de la variación de la aceleracion, generalmente 1/4 - 1/6
+
+
+def f_beta_newmark(ug, u0, up0, Tn, ζ, Δt, γ, β):
+    m = 0.652
+    p = -m * ug
+
+    k = m * (2 * pi / Tn) ** 2
+    wn = 2 * pi / Tn
+    c = 2 * ζ * m * wn
+
+    u = np.zeros(len(p))
+    up = np.zeros(len(p))
+    upp = np.zeros(len(p))
+
+    u[0] = u0
+    up[0] = up0
+    upp[0] = (p[0] - c * up0 - k * u0) / m
+
+    a1 = 1 / (β * Δt ** 2) * m + γ / (β * Δt) * c
+    a2 = 1 / (β * Δt) * m + (γ / β - 1) * c
+    a3 = (1 / (2 * β) - 1) * m + Δt * (γ / (2 * β) - 1) * c
+
+    kt = k + a1
+
+    for i in range(len(p) - 1):
+        pti_1 = p[i + 1] + a1 * u[i] + a2 * up[i] + a3 * upp[i]
+        u[i + 1] = pti_1 / kt
+        up[i + 1] = (γ / (β * Δt)) * (u[i + 1] - u[i]) + (1 - γ / β) * up[i] + Δt * (1 - γ / (2 * β)) * upp[i]
+        upp[i + 1] = (u[i + 1] - u[i]) / (β * Δt ** 2) - up[i] / (β * Δt) - (1 / (2 * β) - 1) * upp[i]
+
+    return u, up, upp
+
+def f_maxi(x):
+    return max(abs(x.min()), abs(x.max())).round(3)
+
+u,up,upp=f_beta_newmark(ug, u0, up0, Tn, ζ, Δt, γ, β)
+
+# Crear una figura y subplots para superponer gráficos
+fig, axs = plt.subplots(3, 1, figsize=(10, 15))
+
+# Graficar aceleración original y Newmark-Beta
+axs[0].plot(t, ug_filtered, color='blue', linewidth=0.5, alpha=1, label='Aceleración Filtrada')
+axs[0].plot(t, upp, 'r--', linewidth=0.5, alpha=1, label='Aceleración Newmark-Beta')
+axs[0].set_title('Aceleración vs. Tiempo')
+axs[0].set_xlabel('Tiempo [s]')
+axs[0].set_ylabel('Aceleración [m/s²]')
+axs[0].grid(alpha=0.25)
+axs[0].legend()
+
+# Graficar velocidad original y Newmark-Beta
+axs[1].plot(t, velocity_filtered, color='red', linewidth=0.5, alpha=1, label='Velocidad Filtrada')
+axs[1].plot(t, up, 'g--', linewidth=0.5, alpha=1, label='Velocidad Newmark-Beta')
+axs[1].set_title('Velocidad vs. Tiempo')
+axs[1].set_xlabel('Tiempo [s]')
+axs[1].set_ylabel('Velocidad [m/s]')
+axs[1].grid(alpha=0.25)
+axs[1].legend()
+
+# Graficar desplazamiento original y Newmark-Beta
+axs[2].plot(t, displacement, color='green', linewidth=0.5, alpha=1, label='Desplazamiento Filtrado')
+axs[2].plot(t, u, 'b--', linewidth=0.5, alpha=1, label='Desplazamiento Newmark-Beta')
+axs[2].set_title('Desplazamiento vs. Tiempo')
+axs[2].set_xlabel('Tiempo [s]')
+axs[2].set_ylabel('Desplazamiento [m]')
+axs[2].grid(alpha=0.25)
+axs[2].legend()
+
+plt.tight_layout()
+plt.show()
+
+# Calcular y mostrar la PGA
+pga = max(abs(max(ug_filtered)), abs(min(ug_filtered)))
+print("Aceleración Máxima:", round(pga, 2), "(m/s²)")
+print("Aceleración Mínima:", round(pga / 9.81, 2), "(g)")
+print("Tiempo máximo para:", max(t))
+
+# Mostrar los resultados máximos y mínimos
+print("Desplazamiento máximo:", round(np.max(displacement), 4), "m")
+print("Desplazamiento mínimo:", round(np.min(displacement), 4), "m")
+print("Velocidad máxima:", round(np.max(velocity_filtered), 4), "m/s")
+print("Velocidad mínima:", round(np.min(velocity_filtered), 4), "m/s")
+
+#########################################################################################################################
+# Calcular y mostrar los resultados máximos y mínimos del programa Newmark-Beta
+print("=== Resultados del Programa Newmark-Beta ===")
+print("Aceleración Máxima:", round(f_maxi(upp), 2), "(m/s²)")
+print("Aceleración Mínima:", round(f_maxi(upp) / 9.81, 2), "(g)")
+print("Desplazamiento Máximo:", round(max(u), 4), "m")
+print("Desplazamiento Mínimo:", round(min(u), 4), "m")
+print("Velocidad Máxima:", round(max(up), 4), "m/s")
+print("Velocidad Mínima:", round(min(up), 4), "m/s")
+# Calcular la densidad espectral de potencia (PSD)
+frequencies, psd = welch(upp, fs=1/dt, nperseg=1024)
+
+# Identificar la frecuencia dominante (frecuencia del pico más alto)
+dominant_frequency = frequencies[np.argmax(psd)]
+
+# Calcular el período natural correspondiente a la frecuencia dominante
+natural_period = 1 / dominant_frequency
+
+print("Frecuencia dominante:", dominant_frequency, "Hz")
+print("Período natural:", natural_period, "s")
