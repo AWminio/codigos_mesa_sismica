@@ -1,0 +1,46 @@
+// Librerias I2C para controlar el mpu6050
+// la libreria MPU6050.h necesita I2Cdev.h, I2Cdev.h necesita Wire.h
+#include "I2Cdev.h"
+#include "MPU6050.h"
+#include "Wire.h"
+
+// La dirección del MPU6050 puede ser 0x68 o 0x69, dependiendo 
+// del estado de AD0. Si no se especifica, 0x68 estará implicito
+MPU6050 sensor1(0x68);
+MPU6050 sensor2(0x69);
+
+// Valores RAW (sin procesar) del acelerometro y giroscopio en los ejes x,y,z
+int ax1, ay1;
+int ax2, ay2;
+
+void setup() {
+  Serial.begin(57600);    // Iniciando puerto serial
+  Wire.begin();           // Iniciando I2C  
+  sensor1.initialize();   // Iniciando el sensor 1
+  sensor2.initialize();   // Iniciando el sensor 2
+
+  if (sensor1.testConnection() && sensor2.testConnection()) 
+    Serial.println("x1,y1,x2,y2");
+  else 
+    Serial.println("Error al iniciar los sensores");
+}
+
+void loop() {
+  // Leer las aceleraciones del sensor 1
+  sensor1.getAcceleration(&ax1, &ay1, 0);
+  float ax1_m_s2 = ax1 * (9.81 / 16384.0);
+  float ay1_m_s2 = ay1 * (9.81 / 16384.0);
+
+  // Leer las aceleraciones del sensor 2
+  sensor2.getAcceleration(&ax2, &ay2, 0);
+  float ax2_m_s2 = ax2 * (9.81 / 16384.0);
+  float ay2_m_s2 = ay2 * (9.81 / 16384.0);
+
+  // Mostrar las lecturas en cuatro columnas separadas por coma
+  Serial.print(ax1_m_s2); Serial.print(","); 
+  Serial.print(ay1_m_s2); Serial.print(",");
+  Serial.print(ax2_m_s2); Serial.print(","); 
+  Serial.println(ay2_m_s2);
+
+  delay(8.67);
+}
